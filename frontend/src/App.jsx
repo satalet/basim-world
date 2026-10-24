@@ -3,12 +3,11 @@ import Globe from 'react-globe.gl';
 
 const API_URL = '';
 
-// علامة بيت المؤسس باسم زربا الدائمة
 const FOUNDER_HOUSE = {
   id: 'founder_basim',
   name: 'بيت المؤسس: باسم زربا',
   flag: '👑',
-  lat: 32.2211, // موقع مميز فوق فلسطين
+  lat: 32.2211,
   lng: 35.2544,
   isFounder: true
 };
@@ -21,6 +20,13 @@ export default function App() {
   const [username, setUsername] = useState('');
   const [selectedCountry, setSelectedCountry] = useState('فلسطين');
   const [loading, setLoading] = useState(false);
+
+  // حالات لوحة تحكم المؤسس
+  const [adminModalOpen, setAdminModalOpen] = useState(false);
+  const [adminPass, setAdminPass] = useState('');
+  const [isAdminAuth, setIsAdminAuth] = useState(false);
+  const [adminHouses, setAdminHouses] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
 
   const fetchPlaces = async () => {
     try {
@@ -38,7 +44,6 @@ export default function App() {
     fetchPlaces();
 
     if (globeRef.current) {
-      // دوران سينمائي ثم تركيز فوري على بيت المؤسس باسم زربا
       globeRef.current.pointOfView({ lat: 20, lng: 0, altitude: 2.5 });
       setTimeout(() => {
         globeRef.current.pointOfView({ lat: 31.9522, lng: 35.2332, altitude: 1.6 }, 2200);
@@ -80,6 +85,51 @@ export default function App() {
     }
   };
 
+  // تسجيل دخول لوحة الإدارة
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setAdminLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/data`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setIsAdminAuth(true);
+        setAdminHouses(data.houses);
+        setPlaces(data.places);
+      } else {
+        alert('كلمة المرور غير صحيحة!');
+      }
+    } catch (err) {
+      alert('تعذر الاتصال بسيرفر الإدارة');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  // حذف بيت مسجل
+  const handleDeleteHouse = async (house) => {
+    if (!confirm(`هل أنت متأكد من حذف بيت ${house.username} في ${house.country}؟`)) return;
+
+    try {
+      const res = await fetch(`${API_URL}/api/admin/delete-house`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, id: house.id, country: house.country })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAdminHouses(data.houses);
+        setPlaces(data.places);
+      }
+    } catch (err) {
+      alert('فشل حذف الإدخال');
+    }
+  };
+
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
       {/* العداد العلوي */}
@@ -92,7 +142,7 @@ export default function App() {
         🌍 عالمنا | إجمالي البيوت: <span style={{ color: '#0284c7' }}>{totalHouses}</span> 🏠
       </div>
 
-      {/* توقيع وبصمة باسم زربا */}
+      {/* شريط المؤسس وبصمته */}
       <div 
         onClick={() => {
           globeRef.current?.pointOfView({ lat: 31.9522, lng: 35.2332, altitude: 1.5 }, 1200);
@@ -123,7 +173,7 @@ export default function App() {
         ➕ ابنِ بيتك في دولتك
       </button>
 
-      {/* نافذة تفاصيل المؤسس */}
+      {/* نافذة تفاصيل المؤسس وزر لوحة الإدارة */}
       {founderModalOpen && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -138,18 +188,110 @@ export default function App() {
             <div style={{ fontSize: '42px', marginBottom: '10px' }}>👑 🇵🇸</div>
             <h3 style={{ margin: '0 0 8px 0', color: '#0f172a' }}>مقر المؤسس: باسم زربا</h3>
             <p style={{ color: '#64748b', fontSize: '14px', lineHeight: '1.6' }}>
-              صاحب الفكرة ومطور منصة "عالمنا" التفاعلية ثلاثية الأبعاد. انطلقت الفكرة لتوثيق وترابط بيوت الوطن العربي على خريطة حية واحدة.
+              صاحب الفكرة ومطور منصة "عالمنا" التفاعلية ثلاثية الأبعاد. انطلقت الفكرة لجمع وترابط كافة بيوت الوطن العربي على خريطة حية واحدة.
             </p>
+
+            <div style={{ display: 'flex', gap: '8px', marginTop: '16px', justifyContent: 'center' }}>
+              <button
+                onClick={() => { setFounderModalOpen(false); setAdminModalOpen(true); }}
+                style={{
+                  background: '#1e293b', color: '#facc15', border: '1px solid #facc15',
+                  padding: '9px 16px', borderRadius: '10px', fontWeight: 'bold', cursor: 'pointer', fontSize: '13px'
+                }}
+              >
+                لوحة تحكم المؤسس 🛡️
+              </button>
+              <button
+                onClick={() => setFounderModalOpen(false)}
+                style={{
+                  background: '#f1f5f9', color: '#475569', border: 'none',
+                  padding: '9px 16px', borderRadius: '10px', cursor: 'pointer', fontSize: '13px'
+                }}
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* نافذة لوحة تحكم المؤسس السرية */}
+      {adminModalOpen && (
+        <div style={{
+          position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(15, 23, 42, 0.75)', zIndex: 40, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', padding: '20px'
+        }}>
+          <div style={{
+            background: 'white', padding: '24px', borderRadius: '18px',
+            width: '100%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto',
+            boxShadow: '0 15px 40px rgba(0,0,0,0.4)', position: 'relative'
+          }}>
             <button
-              onClick={() => setFounderModalOpen(false)}
-              style={{
-                marginTop: '15px', background: '#0f172a', color: '#facc15',
-                border: 'none', padding: '10px 24px', borderRadius: '12px',
-                fontWeight: 'bold', cursor: 'pointer'
-              }}
+              onClick={() => setAdminModalOpen(false)}
+              style={{ position: 'absolute', top: 15, right: 15, background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer' }}
             >
-              إغلاق
+              ✕
             </button>
+
+            {!isAdminAuth ? (
+              <form onSubmit={handleAdminLogin} style={{ textAlign: 'center', padding: '10px 0' }}>
+                <div style={{ fontSize: '36px', marginBottom: '8px' }}>🛡️</div>
+                <h3 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>لوحة التحكم السرية للمؤسس</h3>
+                <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>أدخل كلمة السر الخاصة بك للدخول للإدارة</p>
+                <input
+                  type="password"
+                  required
+                  placeholder="كلمة السر..."
+                  value={adminPass}
+                  onChange={(e) => setAdminPass(e.target.value)}
+                  style={{ width: '80%', padding: '10px 14px', borderRadius: '8px', border: '1px solid #cbd5e1', marginBottom: '14px', fontSize: '15px' }}
+                />
+                <br />
+                <button
+                  type="submit"
+                  disabled={adminLoading}
+                  style={{ background: '#0f172a', color: '#facc15', border: 'none', padding: '10px 24px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer' }}
+                >
+                  {adminLoading ? 'جاري التحقق...' : 'دخول اللوحة 🔐'}
+                </button>
+              </form>
+            ) : (
+              <div>
+                <h3 style={{ margin: '0 0 6px 0', color: '#0f172a' }}>سجل البيوت والمستخدمين 📋</h3>
+                <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '14px' }}>
+                  يمكنك استعراض كافة الحسابات وحذف أي اسم مخالف فوراً من السيرفر.
+                </p>
+
+                {adminHouses.length === 0 ? (
+                  <div style={{ padding: '20px', textAlign: 'center', color: '#94a3b8' }}>لا يوجد بيوت مضافة يدوياً بعد</div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {adminHouses.map((h) => (
+                      <div key={h.id} style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '10px 14px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'
+                      }}>
+                        <div>
+                          <span style={{ fontWeight: 'bold', color: '#1e293b' }}>{h.username}</span>
+                          <span style={{ color: '#64748b', fontSize: '12px', marginRight: '8px' }}>({h.country})</span>
+                          <div style={{ color: '#94a3b8', fontSize: '11px' }}>{new Date(h.createdAt).toLocaleString('ar')}</div>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteHouse(h)}
+                          style={{
+                            background: '#fee2e2', color: '#ef4444', border: 'none',
+                            padding: '6px 12px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer'
+                          }}
+                        >
+                          حذف 🗑️
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -223,7 +365,6 @@ export default function App() {
           el.style.cursor = 'pointer';
 
           if (d.isFounder) {
-            // تصميم بيت المؤسس الذهبي المتوهج
             el.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
             el.style.color = '#ffffff';
             el.style.border = '2px solid #ffffff';
@@ -238,7 +379,6 @@ export default function App() {
               setFounderModalOpen(true);
             };
           } else {
-            // تصميم بقية الدول العادية
             el.onclick = () => {
               globeRef.current.pointOfView({ lat: d.lat, lng: d.lng, altitude: 1.5 }, 1200);
             };
