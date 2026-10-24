@@ -3,13 +3,16 @@ import Globe from 'react-globe.gl';
 
 const API_URL = '';
 
+// رقم واتساب باسم المعتمد
+const BASIM_WHATSAPP_NUMBER = "972523260604";
+
 const FOUNDER_HOUSE = {
   id: 'founder_basim',
   username: 'مقر المؤسس: باسم',
   country: 'فلسطين',
-  locationName: 'فلسطين - القدس / نابلس',
-  lat: 31.9522,
-  lng: 35.2332,
+  locationName: 'فلسطين - دوار المنارة / رام الله',
+  lat: 31.9038,
+  lng: 35.2034,
   isFounder: true
 };
 
@@ -20,6 +23,13 @@ export default function App() {
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [selectedHouse, setSelectedHouse] = useState(null);
   const [founderModalOpen, setFounderModalOpen] = useState(false);
+
+  // نافذة طلب إضافة بيت عبر واتساب
+  const [requestModalOpen, setRequestModalOpen] = useState(false);
+  const [reqUsername, setReqUsername] = useState('');
+  const [reqCountry, setReqCountry] = useState('فلسطين');
+  const [reqLocationLink, setReqLocationLink] = useState('');
+  const [geoLocating, setGeoLocating] = useState(false);
 
   // لوحة إدارة باسم
   const [adminModalOpen, setAdminModalOpen] = useState(false);
@@ -55,11 +65,12 @@ export default function App() {
     fetchPlaces();
 
     if (globeRef.current) {
-      globeRef.current.pointOfView({ lat: 26.0, lng: 38.0, altitude: 2.1 }, 1000);
+      // توجيه الكاميرا مباشرة على فلسطين والوطن العربي
+      globeRef.current.pointOfView({ lat: 31.95, lng: 35.25, altitude: 1.8 }, 1000);
       globeRef.current.controls().autoRotate = false;
       globeRef.current.controls().enableDamping = true;
-      // فك قفل التكبير العميق لرؤية الشوارع والبيوت بدقة فائقة
-      globeRef.current.controls().minDistance = 101; 
+      // فتح التكبير العميق جداً لرؤية الشوارع والبيوت بدقة
+      globeRef.current.controls().minDistance = 100.8;
     }
   }, []);
 
@@ -70,7 +81,7 @@ export default function App() {
     setSelectedHouse(null);
 
     if (globeRef.current) {
-      globeRef.current.pointOfView({ lat: place.lat, lng: place.lng, altitude: 0.28 }, 1400);
+      globeRef.current.pointOfView({ lat: place.lat, lng: place.lng, altitude: 0.18 }, 1400);
     }
   };
 
@@ -83,7 +94,45 @@ export default function App() {
     }
   };
 
-  // فحص الموقع عبر Gemini AI في الباك إند
+  // سحب موقع الزائر عبر GPS التلفون
+  const handleGetLiveLocation = () => {
+    if (!navigator.geolocation) {
+      alert('متصفحك لا يدعم تحديد الموقع التلقائي');
+      return;
+    }
+    setGeoLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const lat = pos.coords.latitude.toFixed(6);
+        const lng = pos.coords.longitude.toFixed(6);
+        setReqLocationLink(`https://maps.google.com/?q=${lat},${lng}`);
+        setGeoLocating(false);
+      },
+      () => {
+        alert('يرجى السماح بصلاحية الموقع من إعدادات المتصفح');
+        setGeoLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  // إرسال الطلب عبر واتساب باسم
+  const handleSendWhatsApp = (e) => {
+    e.preventDefault();
+    if (!reqUsername.trim()) return;
+
+    const message = `مرحباً باسم! حابب أطلب بناء بيتي في منصة "عالمنا" 🌍🏡\n\n` +
+      `👤 الاسم / الحساب: ${reqUsername.trim()}\n` +
+      `🚩 الدولة: ${reqCountry}\n` +
+      `📍 موقع البيت أو الرابط: ${reqLocationLink.trim() || 'سيتم إرساله في المحادثة'}`;
+
+    const encodedMsg = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/${BASIM_WHATSAPP_NUMBER}?text=${encodedMsg}`;
+    window.open(whatsappUrl, '_blank');
+    setRequestModalOpen(false);
+  };
+
+  // فحص واستخراج الموقع بالذكاء الاصطناعي (Gemini)
   const handleResolveLocationWithAI = async () => {
     if (!locationPrompt.trim()) return alert('اكتب اسم الحي أو الصق الرابط أولاً');
     setAiLoading(true);
@@ -118,9 +167,8 @@ export default function App() {
       let lat = house.lat;
       let lng = house.lng;
 
-      // إذا لم يكن له موقع دقيق يتم توزيعه بدائرة حول عاصمة الدولة
       if (!lat || !lng) {
-        const radius = 0.25 + (idx * 0.12);
+        const radius = 0.08 + (idx * 0.04);
         const angle = idx * 2.39996;
         lat = selectedCountry.lat + Math.sin(angle) * radius;
         lng = selectedCountry.lng + Math.cos(angle) * (radius / Math.cos(selectedCountry.lat * (Math.PI / 180)));
@@ -266,8 +314,8 @@ export default function App() {
     if (targetCountry) {
       setAdminModalOpen(false);
       setSelectedCountry(targetCountry);
-      // زووم سينمائي خارق ومقرب جداً من البيت
-      globeRef.current?.pointOfView({ lat: house.lat || targetCountry.lat, lng: house.lng || targetCountry.lng, altitude: 0.08 }, 1500);
+      // زووم عميق جداً فوق سقف البيت مباشرة
+      globeRef.current?.pointOfView({ lat: house.lat || targetCountry.lat, lng: house.lng || targetCountry.lng, altitude: 0.04 }, 1500);
     }
   };
 
@@ -295,8 +343,8 @@ export default function App() {
         <span style={{ color: '#38bdf8' }}>{totalHouses} بيوت مبنية</span>
       </div>
 
-      {/* زر العودة */}
-      {selectedCountry && (
+      {/* الزر العلوي الأيمن: الرجوع أو طلب البناء عبر واتساب */}
+      {selectedCountry ? (
         <button
           onClick={handleResetView}
           style={{
@@ -310,6 +358,21 @@ export default function App() {
         >
           <span>⬅️</span>
           <span>الرجوع للمشهد العام</span>
+        </button>
+      ) : (
+        <button
+          onClick={() => setRequestModalOpen(true)}
+          style={{
+            position: 'fixed', top: 14, right: 14, zIndex: 9999,
+            background: 'linear-gradient(135deg, #25D366, #128C7E)', color: '#ffffff',
+            border: '1px solid rgba(255,255,255,0.4)',
+            padding: '9px 18px', borderRadius: '30px', fontWeight: 'bold',
+            fontSize: '12px', cursor: 'pointer', boxShadow: '0 8px 25px rgba(37, 211, 102, 0.45)',
+            display: 'flex', alignItems: 'center', gap: '6px'
+          }}
+        >
+          <span>💬</span>
+          <span>اطلب بناء بيتك</span>
         </button>
       )}
 
@@ -355,7 +418,7 @@ export default function App() {
       }}>
         <div 
           onClick={() => {
-            globeRef.current?.pointOfView({ lat: 31.9522, lng: 35.2332, altitude: 0.12 }, 1200);
+            globeRef.current?.pointOfView({ lat: 31.9038, lng: 35.2034, altitude: 0.05 }, 1200);
             setFounderModalOpen(true);
           }}
           style={{
@@ -380,6 +443,98 @@ export default function App() {
           🛡️ لوحة إدارة باسم
         </button>
       </div>
+
+      {/* نافذة طلب إضافة بيت عبر واتساب باسم */}
+      {requestModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+        }}>
+          <div style={{
+            background: '#ffffff', padding: '24px', borderRadius: '24px',
+            maxWidth: '380px', width: '100%', boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+            position: 'relative'
+          }}>
+            <button
+              onClick={() => setRequestModalOpen(false)}
+              style={{ position: 'absolute', top: 14, right: 14, background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
+            >
+              ✕
+            </button>
+
+            <div style={{ textAlign: 'center', marginBottom: '14px' }}>
+              <div style={{ fontSize: '38px', marginBottom: '4px' }}>🏡 💬</div>
+              <h3 style={{ margin: '0 0 4px 0', color: '#0f172a', fontSize: '19px' }}>اطلب بناء بيتك على الخريطة</h3>
+              <p style={{ color: '#64748b', fontSize: '13px', margin: 0 }}>
+                أرسل طلبك مباشرة لواتساب باسم ليوثقه بالذكاء الاصطناعي
+              </p>
+            </div>
+
+            <form onSubmit={handleSendWhatsApp} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '12px', color: '#475569', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>اسمك أو حسابك:</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="مثال: @ahmed"
+                  value={reqUsername}
+                  onChange={(e) => setReqUsername(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '12px', color: '#475569', display: 'block', marginBottom: '4px', fontWeight: 'bold' }}>الدولة:</label>
+                <select
+                  value={reqCountry}
+                  onChange={(e) => setReqCountry(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '14px' }}
+                >
+                  {places.map((p) => (
+                    <option key={p.id} value={p.name}>{p.flag} {p.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={{ fontSize: '12px', color: '#475569', fontWeight: 'bold' }}>موقع بيتك (اختياري):</label>
+                  <button
+                    type="button"
+                    onClick={handleGetLiveLocation}
+                    disabled={geoLocating}
+                    style={{ background: '#e0f2fe', color: '#0284c7', border: 'none', padding: '3px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                  >
+                    {geoLocating ? 'جاري السحب...' : '📍 موقعي الحالي'}
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  placeholder="رابط خرائط جوجل أو اسم الحي"
+                  value={reqLocationLink}
+                  onChange={(e) => setReqLocationLink(e.target.value)}
+                  style={{ width: '100%', padding: '10px', borderRadius: '10px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                />
+              </div>
+
+              <button
+                type="submit"
+                style={{
+                  marginTop: '8px', background: 'linear-gradient(135deg, #25D366, #128C7E)',
+                  color: 'white', border: 'none', padding: '12px', borderRadius: '12px',
+                  fontWeight: 'bold', fontSize: '14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                  boxShadow: '0 6px 20px rgba(37, 211, 102, 0.4)'
+                }}
+              >
+                <span>💬</span>
+                <span>إرسال الطلب عبر واتساب باسم</span>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* بطاقة تفاصيل البيت الفردي */}
       {selectedHouse && (
@@ -430,7 +585,7 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم وإدارة باسم المدعومة بـ Gemini AI */}
+      {/* لوحة تحكم وإدارة باسم */}
       {adminModalOpen && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -498,13 +653,12 @@ export default function App() {
                     </select>
                   </div>
 
-                  {/* خانة الموقع والذكاء الاصطناعي */}
                   <div style={{ marginBottom: '10px' }}>
-                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>الموقع / الحي / رابط الخريطة:</label>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>الموقع / الحي / رابط الخريطة من الواتساب:</label>
                     <div style={{ display: 'flex', gap: '6px' }}>
                       <input
                         type="text"
-                        placeholder="مثال: نابلس رفيديا، أو الصق رابط خرائط جوجل"
+                        placeholder="الصق الرابط أو اكتب: رام الله المنارة، نابلس رفيديا..."
                         value={locationPrompt}
                         onChange={(e) => setLocationPrompt(e.target.value)}
                         style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
@@ -635,11 +789,42 @@ export default function App() {
         </div>
       )}
 
-      {/* الكرة الأرضية بمحرك أقمار صناعية وتكبير فائق ومفتوح */}
+      {/* تفاصيل المؤسس باسم */}
+      {founderModalOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 10000,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
+        }}>
+          <div style={{
+            background: 'linear-gradient(145deg, #1e293b, #0f172a)',
+            padding: '26px', borderRadius: '24px', maxWidth: '340px', width: '100%',
+            textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
+            border: '2px solid #facc15', color: '#ffffff'
+          }}>
+            <div style={{ fontSize: '42px', marginBottom: '8px', filter: 'drop-shadow(0 0 15px #facc15)' }}>👑 🇵🇸</div>
+            <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', color: '#facc15' }}>مقر المؤسس: باسم</h3>
+            <p style={{ color: '#cbd5e1', fontSize: '13px', lineHeight: '1.7', margin: '0 0 18px 0' }}>
+              صاحب الفكرة ومطور منصة "عالمنا". منصة تجمع بيوت الأصدقاء والداعمين الحقيقيين على خريطة حية ثلاثية الأبعاد بإشرافه واعتماده الحصري.
+            </p>
+            <button
+              onClick={() => setFounderModalOpen(false)}
+              style={{
+                background: '#0f172a', color: '#facc15', border: '1px solid #facc15',
+                padding: '11px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', width: '100%'
+              }}
+            >
+              إغلاق
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* خرائط Google Hybrid الفائقة (قمر صناعي + أسماء شوارع وعمارات ومدن) */}
       <Globe
         ref={globeRef}
         backgroundColor="#090d16"
-        globeTileEngineUrl={(x, y, l) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${l}/${y}/${x}`}
+        globeTileEngineUrl={(x, y, l) => `https://mt1.google.com/vt/lyrs=y&x=${x}&y=${y}&z=${l}`}
         atmosphereColor="#38bdf8"
         atmosphereAltitude={0.15}
         htmlElementsData={getDisplayMarkers()}
@@ -667,7 +852,7 @@ export default function App() {
               </div>
             `;
             el.onclick = () => {
-              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.12 }, 1000);
+              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.04 }, 1000);
               setFounderModalOpen(true);
             };
           } else if (d.isHouse) {
@@ -688,8 +873,7 @@ export default function App() {
             `;
             el.onclick = () => {
               setSelectedHouse(d);
-              // زووم فائق العمق للبيت الحقيقي
-              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.05 }, 1000);
+              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.035 }, 1000);
             };
           } else if (d.isCenterLabel) {
             el.innerHTML = `
