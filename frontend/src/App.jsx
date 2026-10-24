@@ -62,26 +62,29 @@ export default function App() {
 
   const totalHouses = allHouses.length;
 
+  // الدخول لعمق الدولة وإظهار بيوتها
   const handleCountryClick = (place) => {
     setSelectedCountry(place);
     setSelectedHouse(null);
 
     if (globeRef.current) {
       globeRef.current.controls().autoRotate = false;
-      globeRef.current.pointOfView({ lat: place.lat, lng: place.lng, altitude: 0.55 }, 1600);
+      globeRef.current.pointOfView({ lat: place.lat, lng: place.lng, altitude: 0.45 }, 1400);
     }
   };
 
+  // العودة للمشهد العام
   const handleResetView = () => {
     setSelectedCountry(null);
     setSelectedHouse(null);
 
     if (globeRef.current) {
       globeRef.current.controls().autoRotate = true;
-      globeRef.current.pointOfView({ lat: 25, lng: 35, altitude: 2.0 }, 1500);
+      globeRef.current.pointOfView({ lat: 25, lng: 35, altitude: 2.0 }, 1400);
     }
   };
 
+  // توليد علامات البيوت الفردية الخاصة بالدولة المختارة
   const getDisplayMarkers = () => {
     if (!selectedCountry) {
       return [...places, FOUNDER_HOUSE];
@@ -89,8 +92,9 @@ export default function App() {
 
     const countryHouses = allHouses.filter(h => h.country === selectedCountry.name);
 
+    // توزيع البيوت بنصف قطر واضح ومتناسق حول الدولة
     const individualHouseMarkers = countryHouses.map((house, idx) => {
-      const radius = 0.3 + (idx * 0.16);
+      const radius = 0.35 + (idx * 0.18);
       const angle = idx * 2.39996;
       const latOffset = Math.sin(angle) * radius;
       const lngOffset = Math.cos(angle) * (radius / Math.cos(selectedCountry.lat * (Math.PI / 180)));
@@ -218,7 +222,6 @@ export default function App() {
     }
   };
 
-  // الانتقال مباشرة إلى بيت الشخص من لوحة الإدارة
   const handleJumpToHouse = (house) => {
     const targetCountry = places.find(p => p.name === house.country);
     if (targetCountry) {
@@ -227,7 +230,6 @@ export default function App() {
     }
   };
 
-  // تصفية البيوت بحسب البحث
   const filteredHouses = allHouses.filter(h =>
     h.username.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
     h.country.toLowerCase().includes(searchTerm.toLowerCase().trim())
@@ -242,22 +244,22 @@ export default function App() {
       {/* العداد العلوي */}
       <div style={{
         position: 'absolute', top: 20, left: 20, zIndex: 10,
-        background: 'rgba(255,255,255,0.92)', padding: '10px 20px',
+        background: 'rgba(255,255,255,0.95)', padding: '10px 20px',
         borderRadius: '30px', boxShadow: '0 4px 15px rgba(0,0,0,0.1)',
         fontWeight: 'bold', fontSize: '15px', color: '#1e293b'
       }}>
         🌍 عالمنا | إجمالي البيوت المعتمدة: <span style={{ color: '#0284c7' }}>{totalHouses}</span> 🏠
       </div>
 
-      {/* زر العودة للمشهد العام */}
+      {/* زر العودة للمشهد العام عند فحص دولة معينة */}
       {selectedCountry && (
         <button
           onClick={handleResetView}
           style={{
-            position: 'absolute', top: 20, right: 20, zIndex: 15,
+            position: 'absolute', top: 20, right: 20, zIndex: 25,
             background: '#0f172a', color: '#f8fafc', border: '1px solid #38bdf8',
-            padding: '10px 20px', borderRadius: '30px', fontWeight: 'bold',
-            fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.25)',
+            padding: '10px 22px', borderRadius: '30px', fontWeight: 'bold',
+            fontSize: '14px', cursor: 'pointer', boxShadow: '0 4px 20px rgba(0,0,0,0.3)',
             display: 'flex', alignItems: 'center', gap: '8px'
           }}
         >
@@ -266,13 +268,14 @@ export default function App() {
         </button>
       )}
 
-      {/* اسم الدولة الحالية */}
+      {/* شريط معلومات الدولة المفتوحة */}
       {selectedCountry && (
         <div style={{
-          position: 'absolute', top: 75, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
-          background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(8px)',
-          color: '#ffffff', padding: '8px 22px', borderRadius: '25px',
-          boxShadow: '0 4px 15px rgba(0,0,0,0.2)', fontSize: '14px', fontWeight: 'bold'
+          position: 'absolute', top: 80, left: '50%', transform: 'translateX(-50%)', zIndex: 15,
+          background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(8px)',
+          color: '#ffffff', padding: '10px 24px', borderRadius: '25px',
+          boxShadow: '0 6px 20px rgba(0,0,0,0.25)', fontSize: '15px', fontWeight: 'bold',
+          border: '1px solid #38bdf8'
         }}>
           {selectedCountry.flag} بيوت {selectedCountry.name} ({activeCountryHousesCount}) 🏡
         </div>
@@ -387,7 +390,7 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم وإدارة باسم مع البحث والتعديل والحذف */}
+      {/* لوحة تحكم وإدارة باسم */}
       {adminModalOpen && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -473,7 +476,6 @@ export default function App() {
                   )}
                 </div>
 
-                {/* شريط البحث السريع بالاسم أو الدولة */}
                 <input
                   type="text"
                   placeholder="🔍 ابحث عن اسم مشارك أو دولة..."
@@ -566,7 +568,7 @@ export default function App() {
         </div>
       )}
 
-      {/* الكرة الأرضية */}
+      {/* الكرة الأرضية ثلاثية الأبعاد مع دعم النقر المباشر 100% */}
       <Globe
         ref={globeRef}
         backgroundColor="#d8edf7"
@@ -576,8 +578,17 @@ export default function App() {
         htmlElement={(d) => {
           const el = document.createElement('div');
           el.className = 'marker-label';
+          
+          // تفعيل النقر ومنع تداخل السحب مع الكرة الأرضية
+          el.style.pointerEvents = 'auto';
           el.style.cursor = 'pointer';
+          el.style.userSelect = 'none';
+          el.style.transition = 'transform 0.2s ease, box-shadow 0.2s ease';
 
+          el.onpointerdown = (e) => e.stopPropagation();
+          el.onmousedown = (e) => e.stopPropagation();
+
+          // 1. بيت المؤسس باسم
           if (d.isFounder) {
             el.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
             el.style.color = '#ffffff';
@@ -588,39 +599,79 @@ export default function App() {
             el.style.fontWeight = 'bold';
             el.style.fontSize = '13px';
             el.innerHTML = `<span>👑</span> <span>${d.name}</span>`;
-            el.onclick = () => {
-              globeRef.current.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.8 }, 1200);
+
+            el.onmouseenter = () => { el.style.transform = 'scale(1.15)'; };
+            el.onmouseleave = () => { el.style.transform = 'scale(1)'; };
+
+            el.onclick = (e) => {
+              e.stopPropagation();
+              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.8 }, 1200);
               setFounderModalOpen(true);
             };
-          } else if (d.isHouse) {
+          } 
+          // 2. بيوت المشاركين الفردية المتوهجة
+          else if (d.isHouse) {
             el.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
             el.style.color = '#ffffff';
-            el.style.border = '2px solid #bae6fd';
-            el.style.boxShadow = '0 0 16px rgba(2, 132, 199, 0.8)';
-            el.style.padding = '5px 12px';
-            el.style.borderRadius = '16px';
+            el.style.border = '2px solid #ffffff';
+            el.style.boxShadow = '0 0 18px rgba(2, 132, 199, 0.9), 0 0 30px rgba(56, 189, 248, 0.6)';
+            el.style.padding = '6px 14px';
+            el.style.borderRadius = '18px';
             el.style.fontWeight = 'bold';
             el.style.fontSize = '12px';
             el.style.display = 'flex';
             el.style.alignItems = 'center';
-            el.style.gap = '5px';
+            el.style.gap = '6px';
             el.style.whiteSpace = 'nowrap';
             el.innerHTML = `<span>🏡</span> <span>${d.username}</span>`;
-            el.onclick = () => {
+
+            el.onmouseenter = () => { el.style.transform = 'scale(1.2)'; };
+            el.onmouseleave = () => { el.style.transform = 'scale(1)'; };
+
+            el.onclick = (e) => {
+              e.stopPropagation();
               setSelectedHouse(d);
-              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.38 }, 800);
+              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.35 }, 800);
             };
-          } else if (d.isCenterLabel) {
-            el.style.background = 'rgba(15, 23, 42, 0.85)';
+          } 
+          // 3. شارة مركز الدولة عند فتحها
+          else if (d.isCenterLabel) {
+            el.style.background = 'rgba(15, 23, 42, 0.9)';
             el.style.color = '#f8fafc';
-            el.style.border = '1px solid #94a3b8';
+            el.style.border = '2px solid #38bdf8';
+            el.style.padding = '6px 14px';
+            el.style.borderRadius = '20px';
+            el.style.fontWeight = 'bold';
+            el.style.fontSize = '13px';
+            el.style.boxShadow = '0 0 15px rgba(56, 189, 248, 0.5)';
+            el.innerHTML = `<span>${d.flag}</span> <span>${d.name}</span>`;
+          } 
+          // 4. الدول في المشهد العام
+          else {
+            el.style.background = 'rgba(255, 255, 255, 0.95)';
+            el.style.color = '#1e293b';
+            el.style.border = '1px solid #cbd5e1';
             el.style.padding = '5px 12px';
             el.style.borderRadius = '20px';
             el.style.fontWeight = 'bold';
             el.style.fontSize = '12px';
-            el.innerHTML = `<span>${d.flag}</span> <span>${d.name}</span>`;
-          } else {
-            el.onclick = () => handleCountryClick(d);
+            el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.15)';
+
+            el.onmouseenter = () => { 
+              el.style.transform = 'scale(1.15)'; 
+              el.style.boxShadow = '0 4px 18px rgba(2, 132, 199, 0.4)';
+              el.style.borderColor = '#0284c7';
+            };
+            el.onmouseleave = () => { 
+              el.style.transform = 'scale(1)'; 
+              el.style.boxShadow = '0 3px 10px rgba(0,0,0,0.15)';
+              el.style.borderColor = '#cbd5e1';
+            };
+
+            el.onclick = (e) => {
+              e.stopPropagation();
+              handleCountryClick(d);
+            };
             el.innerHTML = `<span>${d.flag}</span> <span>${d.name}</span> <span style="color: #0284c7; font-weight: bold;">(${d.count})</span> 🏠`;
           }
           return el;
