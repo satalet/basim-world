@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Globe from 'react-globe.gl';
 
+// رابط سيرفرك المباشر
+const API_URL = 'http://207.154.195.151:4000';
+
 export default function App() {
   const globeRef = useRef();
   const [places, setPlaces] = useState([]);
@@ -9,16 +12,16 @@ export default function App() {
   const [selectedCountry, setSelectedCountry] = useState('فلسطين');
   const [loading, setLoading] = useState(false);
 
-  // دالة لجلب البيانات من سيرفر الباك إند (البورت 4000)
+  // جلب البيانات من سيرفر الـ VPS
   const fetchPlaces = async () => {
     try {
-      const res = await fetch('http://localhost:4000/api/places');
+      const res = await fetch(`${API_URL}/api/places`);
       const data = await res.json();
       if (data.success) {
         setPlaces(data.places);
       }
     } catch (err) {
-      console.error('خطأ في الاتصال بالباك إند:', err);
+      console.error('خطأ في الاتصال بسيرفر الباك إند:', err);
     }
   };
 
@@ -34,14 +37,14 @@ export default function App() {
 
   const totalHouses = places.reduce((acc, p) => acc + (p.count || 0), 0);
 
-  // إرسال البيت الجديد للباك إند وحفظه بالملف
+  // إرسال البيت لسيرفر الـ VPS
   const handleAddHouse = async (e) => {
     e.preventDefault();
     if (!username.trim() || loading) return;
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:4000/api/houses', {
+      const res = await fetch(`${API_URL}/api/houses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, country: selectedCountry })
@@ -51,7 +54,6 @@ export default function App() {
       if (data.success) {
         setPlaces(data.places);
 
-        // تحريك الكاميرا على الدولة
         const target = data.places.find((p) => p.name === selectedCountry);
         if (target && globeRef.current) {
           globeRef.current.pointOfView({ lat: target.lat, lng: target.lng, altitude: 1.5 }, 1200);
@@ -61,7 +63,7 @@ export default function App() {
         setModalOpen(false);
       }
     } catch (err) {
-      alert('فشل الاتصال بالسيرفر!');
+      alert('فشل الاتصال بسيرفر الباك إند!');
     } finally {
       setLoading(false);
     }
@@ -69,7 +71,7 @@ export default function App() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative', overflow: 'hidden' }}>
-      {/* الشريط العلوي */}
+      {/* العداد العلوي */}
       <div style={{
         position: 'absolute', top: 20, left: 20, zIndex: 10,
         background: 'rgba(255,255,255,0.92)', padding: '10px 18px',
@@ -79,7 +81,7 @@ export default function App() {
         🌍 عالمنا | إجمالي البيوت: <span style={{ color: '#0284c7' }}>{totalHouses}</span> 🏠
       </div>
 
-      {/* توقيع باسم زربا */}
+      {/* توقيع وبصمة باسم زربا */}
       <div style={{
         position: 'absolute', bottom: 25, left: 25, zIndex: 10,
         background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(6px)',
@@ -162,7 +164,7 @@ export default function App() {
         </div>
       )}
 
-      {/* مجسم الكرة الأرضية */}
+      {/* الكرة الأرضية ثلاثية الأبعاد */}
       <Globe
         ref={globeRef}
         backgroundColor="#d8edf7"
