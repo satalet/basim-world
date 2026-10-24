@@ -7,6 +7,7 @@ const FOUNDER_HOUSE = {
   id: 'founder_basim',
   username: 'مقر المؤسس: باسم',
   country: 'فلسطين',
+  locationName: 'فلسطين - القدس / نابلس',
   lat: 31.9522,
   lng: 35.2332,
   isFounder: true
@@ -26,6 +27,9 @@ export default function App() {
   const [isAdminAuth, setIsAdminAuth] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newCountry, setNewCountry] = useState('فلسطين');
+  const [locationPrompt, setLocationPrompt] = useState('');
+  const [resolvedCoords, setResolvedCoords] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
   const [adminLoading, setAdminLoading] = useState(false);
 
   // البحث والتعديل
@@ -51,26 +55,25 @@ export default function App() {
     fetchPlaces();
 
     if (globeRef.current) {
-      // تمركز أولي مباشر فوق فلسطين والوطن العربي
       globeRef.current.pointOfView({ lat: 26.0, lng: 38.0, altitude: 2.1 }, 1000);
       globeRef.current.controls().autoRotate = false;
       globeRef.current.controls().enableDamping = true;
+      // فك قفل التكبير العميق لرؤية الشوارع والبيوت بدقة فائقة
+      globeRef.current.controls().minDistance = 101; 
     }
   }, []);
 
   const totalHouses = allHouses.length;
 
-  // الطيران التفاعلي لعمق الدولة
   const handleCountryClick = (place) => {
     setSelectedCountry(place);
     setSelectedHouse(null);
 
     if (globeRef.current) {
-      globeRef.current.pointOfView({ lat: place.lat, lng: place.lng, altitude: 0.42 }, 1400);
+      globeRef.current.pointOfView({ lat: place.lat, lng: place.lng, altitude: 0.28 }, 1400);
     }
   };
 
-  // العودة للمشهد العام
   const handleResetView = () => {
     setSelectedCountry(null);
     setSelectedHouse(null);
@@ -80,7 +83,30 @@ export default function App() {
     }
   };
 
-  // إعداد عناصر الخريطة
+  // فحص الموقع عبر Gemini AI في الباك إند
+  const handleResolveLocationWithAI = async () => {
+    if (!locationPrompt.trim()) return alert('اكتب اسم الحي أو الصق الرابط أولاً');
+    setAiLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/ai-geocode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPass, locationQuery: locationPrompt })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setResolvedCoords({ lat: data.lat, lng: data.lng, address: data.address });
+        alert(`تم تحديد الموقع بدقة بالذكاء الاصطناعي: ${data.address}`);
+      } else {
+        alert(data.message || 'تعذر تحديد الموقع');
+      }
+    } catch (err) {
+      alert('خطأ في الاتصال بالذكاء الاصطناعي');
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const getDisplayMarkers = () => {
     if (!selectedCountry) {
       return [...places, FOUNDER_HOUSE];
@@ -89,18 +115,25 @@ export default function App() {
     const countryHouses = allHouses.filter(h => h.country === selectedCountry.name);
 
     const individualHouseMarkers = countryHouses.map((house, idx) => {
-      const radius = 0.35 + (idx * 0.16);
-      const angle = idx * 2.39996;
-      const latOffset = Math.sin(angle) * radius;
-      const lngOffset = Math.cos(angle) * (radius / Math.cos(selectedCountry.lat * (Math.PI / 180)));
+      let lat = house.lat;
+      let lng = house.lng;
+
+      // إذا لم يكن له موقع دقيق يتم توزيعه بدائرة حول عاصمة الدولة
+      if (!lat || !lng) {
+        const radius = 0.25 + (idx * 0.12);
+        const angle = idx * 2.39996;
+        lat = selectedCountry.lat + Math.sin(angle) * radius;
+        lng = selectedCountry.lng + Math.cos(angle) * (radius / Math.cos(selectedCountry.lat * (Math.PI / 180)));
+      }
 
       return {
         id: `house_${house.id}`,
         username: house.username,
         country: house.country,
+        locationName: house.locationName || house.country,
         createdAt: house.createdAt,
-        lat: selectedCountry.lat + latOffset,
-        lng: selectedCountry.lng + lngOffset,
+        lat,
+        lng,
         isHouse: true
       };
     });
@@ -147,17 +180,28 @@ export default function App() {
 
     setAdminLoading(true);
     try {
+      const payload = {
+        password: adminPass,
+        username: newUsername,
+        country: newCountry,
+        lat: resolvedCoords?.lat,
+        lng: resolvedCoords?.lng,
+        locationName: resolvedCoords?.address || locationPrompt
+      };
+
       const res = await fetch(`${API_URL}/api/admin/add-house`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: adminPass, username: newUsername, country: newCountry })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
         setPlaces(data.places);
         setAllHouses(data.houses);
         setNewUsername('');
-        alert(`تم اعتماد وبناء بيت ${newUsername} في ${newCountry}!`);
+        setLocationPrompt('');
+        setResolvedCoords(null);
+        alert(`تم اعتماد وبناء بيت ${newUsername} في موقعه الدقيق!`);
       }
     } catch (err) {
       alert('فشل إضافة المشارك');
@@ -221,7 +265,9 @@ export default function App() {
     const targetCountry = places.find(p => p.name === house.country);
     if (targetCountry) {
       setAdminModalOpen(false);
-      handleCountryClick(targetCountry);
+      setSelectedCountry(targetCountry);
+      // زووم سينمائي خارق ومقرب جداً من البيت
+      globeRef.current?.pointOfView({ lat: house.lat || targetCountry.lat, lng: house.lng || targetCountry.lng, altitude: 0.08 }, 1500);
     }
   };
 
@@ -237,7 +283,7 @@ export default function App() {
   return (
     <div style={{ width: '100vw', height: '100dvh', position: 'relative', overflow: 'hidden', background: '#090d16' }}>
       
-      {/* 1. العداد العلوي بتصميم زجاجي عصري */}
+      {/* العداد العلوي */}
       <div style={{
         position: 'fixed', top: 14, left: 14, zIndex: 9999,
         background: 'rgba(15, 23, 42, 0.85)', backdropFilter: 'blur(12px)',
@@ -249,7 +295,7 @@ export default function App() {
         <span style={{ color: '#38bdf8' }}>{totalHouses} بيوت مبنية</span>
       </div>
 
-      {/* زر العودة للمشهد العام */}
+      {/* زر العودة */}
       {selectedCountry && (
         <button
           onClick={handleResetView}
@@ -267,20 +313,7 @@ export default function App() {
         </button>
       )}
 
-      {/* عنوان الدولة المفتوحة */}
-      {selectedCountry && (
-        <div style={{
-          position: 'fixed', top: 64, left: '50%', transform: 'translateX(-50%)', zIndex: 9990,
-          background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(12px)',
-          color: '#ffffff', padding: '8px 20px', borderRadius: '25px',
-          boxShadow: '0 8px 25px rgba(0,0,0,0.5)', fontSize: '14px', fontWeight: 'bold',
-          whiteSpace: 'nowrap', border: '1px solid #38bdf8'
-        }}>
-          {selectedCountry.flag} بيوت {selectedCountry.name} ({activeCountryHouses.length}) 🏡
-        </div>
-      )}
-
-      {/* 2. شريط التصفح السريع للدول بالأسفل */}
+      {/* شريط الدول السريع */}
       <div style={{
         position: 'fixed', bottom: 64, left: 0, right: 0, zIndex: 9990,
         display: 'flex', gap: '8px', overflowX: 'auto', padding: '6px 14px',
@@ -295,8 +328,7 @@ export default function App() {
               style={{
                 flexShrink: 0,
                 background: isSelected ? 'linear-gradient(135deg, #0284c7, #0369a1)' : 'rgba(15, 23, 42, 0.85)',
-                backdropFilter: 'blur(10px)',
-                color: '#ffffff',
+                backdropFilter: 'blur(10px)', color: '#ffffff',
                 border: isSelected ? '2px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.15)',
                 padding: '8px 14px', borderRadius: '22px', fontSize: '12px',
                 fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.3)',
@@ -316,14 +348,14 @@ export default function App() {
         })}
       </div>
 
-      {/* 3. شريط باسم السفلي الثابت */}
+      {/* شريط باسم السفلي */}
       <div style={{
         position: 'fixed', bottom: 12, left: 14, right: 14, zIndex: 9999,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px'
       }}>
         <div 
           onClick={() => {
-            globeRef.current?.pointOfView({ lat: 31.9522, lng: 35.2332, altitude: 0.6 }, 1000);
+            globeRef.current?.pointOfView({ lat: 31.9522, lng: 35.2332, altitude: 0.12 }, 1200);
             setFounderModalOpen(true);
           }}
           style={{
@@ -349,7 +381,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* بطاقة البيت الفردي */}
+      {/* بطاقة تفاصيل البيت الفردي */}
       {selectedHouse && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -372,14 +404,14 @@ export default function App() {
             <div style={{ fontSize: '46px', marginBottom: '8px', filter: 'drop-shadow(0 0 12px #38bdf8)' }}>🏡</div>
             <h3 style={{ margin: '0 0 4px 0', fontSize: '20px', color: '#38bdf8' }}>{selectedHouse.username}</h3>
             <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 16px 0' }}>
-              مالك البيت المعتمد في <strong>{selectedHouse.country}</strong>
+              📍 <strong>{selectedHouse.locationName || selectedHouse.country}</strong>
             </p>
 
             <div style={{
               background: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)',
               borderRadius: '16px', padding: '14px', textAlign: 'right', fontSize: '12px', lineHeight: '1.8', color: '#e2e8f0', marginBottom: '16px'
             }}>
-              <div>✓ <strong>حالة الاعتماد:</strong> <span style={{ color: '#34d399', fontWeight: 'bold' }}>موثق في المنصة</span></div>
+              <div>✓ <strong>حالة الاعتماد:</strong> <span style={{ color: '#34d399', fontWeight: 'bold' }}>موثق بالأقمار الصناعية</span></div>
               <div>📅 <strong>تاريخ الاعتماد:</strong> {new Date(selectedHouse.createdAt).toLocaleDateString('ar')}</div>
               <div>👑 <strong>إشراف المؤسس:</strong> باسم | Basim</div>
             </div>
@@ -398,38 +430,7 @@ export default function App() {
         </div>
       )}
 
-      {/* تفاصيل المؤسس باسم */}
-      {founderModalOpen && (
-        <div style={{
-          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
-          background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(8px)', zIndex: 10000,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px'
-        }}>
-          <div style={{
-            background: 'linear-gradient(145deg, #1e293b, #0f172a)',
-            padding: '26px', borderRadius: '24px', maxWidth: '340px', width: '100%',
-            textAlign: 'center', boxShadow: '0 25px 50px rgba(0,0,0,0.6)',
-            border: '2px solid #facc15', color: '#ffffff'
-          }}>
-            <div style={{ fontSize: '42px', marginBottom: '8px', filter: 'drop-shadow(0 0 15px #facc15)' }}>👑 🇵🇸</div>
-            <h3 style={{ margin: '0 0 6px 0', fontSize: '20px', color: '#facc15' }}>مقر المؤسس: باسم</h3>
-            <p style={{ color: '#cbd5e1', fontSize: '13px', lineHeight: '1.7', margin: '0 0 18px 0' }}>
-              صاحب الفكرة ومطور منصة "عالمنا". منصة تجمع بيوت الأصدقاء والداعمين الحقيقيين على خريطة حية ثلاثية الأبعاد بإشرافه واعتماده الحصري.
-            </p>
-            <button
-              onClick={() => setFounderModalOpen(false)}
-              style={{
-                background: '#0f172a', color: '#facc15', border: '1px solid #facc15',
-                padding: '11px 24px', borderRadius: '12px', fontWeight: 'bold', cursor: 'pointer', width: '100%'
-              }}
-            >
-              إغلاق
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* لوحة تحكم وإدارة باسم */}
+      {/* لوحة تحكم وإدارة باسم المدعومة بـ Gemini AI */}
       {adminModalOpen && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -471,8 +472,8 @@ export default function App() {
               </form>
             ) : (
               <div>
-                <h3 style={{ margin: '0 0 10px 0', color: '#0f172a', fontSize: '17px' }}>إضافة بيت مشارك جديد ➕</h3>
-                <form onSubmit={handleAddPerson} style={{ background: '#f8fafc', padding: '12px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+                <h3 style={{ margin: '0 0 10px 0', color: '#0f172a', fontSize: '17px' }}>إضافة بيت بدقة الذكاء الاصطناعي 🤖</h3>
+                <form onSubmit={handleAddPerson} style={{ background: '#f8fafc', padding: '14px', borderRadius: '14px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
                   <div style={{ marginBottom: '8px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>اسم الشخص أو حسابه:</label>
                     <input
@@ -484,7 +485,7 @@ export default function App() {
                       style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '14px' }}
                     />
                   </div>
-                  <div style={{ marginBottom: '10px' }}>
+                  <div style={{ marginBottom: '8px' }}>
                     <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>الدولة:</label>
                     <select
                       value={newCountry}
@@ -496,12 +497,40 @@ export default function App() {
                       ))}
                     </select>
                   </div>
+
+                  {/* خانة الموقع والذكاء الاصطناعي */}
+                  <div style={{ marginBottom: '10px' }}>
+                    <label style={{ fontSize: '11px', color: '#64748b', display: 'block', marginBottom: '3px' }}>الموقع / الحي / رابط الخريطة:</label>
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      <input
+                        type="text"
+                        placeholder="مثال: نابلس رفيديا، أو الصق رابط خرائط جوجل"
+                        value={locationPrompt}
+                        onChange={(e) => setLocationPrompt(e.target.value)}
+                        style={{ flex: 1, padding: '10px', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleResolveLocationWithAI}
+                        disabled={aiLoading}
+                        style={{ background: '#3b82f6', color: 'white', border: 'none', padding: '0 12px', borderRadius: '8px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        {aiLoading ? 'جاري الفحص...' : 'تحديد بـ AI 🤖'}
+                      </button>
+                    </div>
+                    {resolvedCoords && (
+                      <div style={{ fontSize: '11px', color: '#10b981', marginTop: '4px', fontWeight: 'bold' }}>
+                        ✓ تم التعرف: {resolvedCoords.address} ({resolvedCoords.lat.toFixed(4)}, {resolvedCoords.lng.toFixed(4)})
+                      </div>
+                    )}
+                  </div>
+
                   <button
                     type="submit"
                     disabled={adminLoading}
                     style={{ width: '100%', background: '#10b981', color: 'white', border: 'none', padding: '11px', borderRadius: '8px', fontWeight: 'bold', cursor: 'pointer', fontSize: '14px' }}
                   >
-                    {adminLoading ? 'جاري البناء...' : 'اعتماد وبناء البيت 🏡'}
+                    {adminLoading ? 'جاري البناء...' : 'اعتماد وبناء البيت في موقعه 🏡'}
                   </button>
                 </form>
 
@@ -571,11 +600,12 @@ export default function App() {
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                             <div>
                               <strong style={{ color: '#1e293b', fontSize: '13px' }}>🏡 {h.username}</strong>
-                              <span style={{ color: '#64748b', fontSize: '11px', marginRight: '6px' }}>({h.country})</span>
+                              <span style={{ color: '#64748b', fontSize: '11px', marginRight: '6px' }}>({h.locationName || h.country})</span>
                             </div>
                             <div style={{ display: 'flex', gap: '5px' }}>
                               <button
                                 onClick={() => handleJumpToHouse(h)}
+                                title="زووم عميق لبيته الحقيقي"
                                 style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '6px 10px', borderRadius: '6px', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer' }}
                               >
                                 📍
@@ -605,7 +635,7 @@ export default function App() {
         </div>
       )}
 
-      {/* الكرة الأرضية بمحرك مربعات عالي الدقة (بدون أي بكسلة) */}
+      {/* الكرة الأرضية بمحرك أقمار صناعية وتكبير فائق ومفتوح */}
       <Globe
         ref={globeRef}
         backgroundColor="#090d16"
@@ -620,7 +650,6 @@ export default function App() {
           el.style.cursor = 'pointer';
           el.style.userSelect = 'none';
 
-          // 1. بيت المؤسس باسم الذهبي
           if (d.isFounder) {
             el.innerHTML = `
               <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%);">
@@ -638,12 +667,10 @@ export default function App() {
               </div>
             `;
             el.onclick = () => {
-              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.6 }, 1000);
+              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.12 }, 1000);
               setFounderModalOpen(true);
             };
-          } 
-          // 2. بيوت المشاركين (شكل بيت مجسم مع نبض ضوئي)
-          else if (d.isHouse) {
+          } else if (d.isHouse) {
             el.innerHTML = `
               <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -100%);">
                 <div style="
@@ -661,11 +688,10 @@ export default function App() {
             `;
             el.onclick = () => {
               setSelectedHouse(d);
-              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.3 }, 800);
+              // زووم فائق العمق للبيت الحقيقي
+              globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.05 }, 1000);
             };
-          } 
-          // 3. شارة مركز الدولة عند فتحها
-          else if (d.isCenterLabel) {
+          } else if (d.isCenterLabel) {
             el.innerHTML = `
               <div style="
                 background: rgba(15, 23, 42, 0.9); color: #f8fafc;
@@ -676,9 +702,7 @@ export default function App() {
                 ${d.flag} ${d.name}
               </div>
             `;
-          } 
-          // 4. شارات الدول في المشهد العام
-          else {
+          } else {
             el.innerHTML = `
               <div style="
                 background: rgba(15, 23, 42, 0.85); backdrop-filter: blur(8px);
