@@ -20,13 +20,18 @@ export default function App() {
   const [selectedHouse, setSelectedHouse] = useState(null);
   const [founderModalOpen, setFounderModalOpen] = useState(false);
 
-  // حالات لوحة إدارة باسم
+  // لوحة تحكم باسم
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [adminPass, setAdminPass] = useState('');
   const [isAdminAuth, setIsAdminAuth] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newCountry, setNewCountry] = useState('فلسطين');
   const [adminLoading, setAdminLoading] = useState(false);
+
+  // حالة التعديل
+  const [editingHouseId, setEditingHouseId] = useState(null);
+  const [editUsername, setEditUsername] = useState('');
+  const [editCountry, setEditCountry] = useState('');
 
   const fetchPlaces = async () => {
     try {
@@ -56,7 +61,6 @@ export default function App() {
 
   const totalHouses = allHouses.length;
 
-  // الدخول لعمق الدولة وإظهار بيوتها
   const handleCountryClick = (place) => {
     setSelectedCountry(place);
     setSelectedHouse(null);
@@ -67,7 +71,6 @@ export default function App() {
     }
   };
 
-  // العودة للمشهد العام الفضائي
   const handleResetView = () => {
     setSelectedCountry(null);
     setSelectedHouse(null);
@@ -78,7 +81,6 @@ export default function App() {
     }
   };
 
-  // توليد علامات البيوت الفردية الخاصة بالدولة المختارة
   const getDisplayMarkers = () => {
     if (!selectedCountry) {
       return [...places, FOUNDER_HOUSE];
@@ -86,10 +88,9 @@ export default function App() {
 
     const countryHouses = allHouses.filter(h => h.country === selectedCountry.name);
 
-    // حساب إحداثيات متفرقة حول عاصمة/مركز الدولة
     const individualHouseMarkers = countryHouses.map((house, idx) => {
       const radius = 0.3 + (idx * 0.16);
-      const angle = idx * 2.39996; // نسبة ذهبية للتوزيع الدائري
+      const angle = idx * 2.39996;
       const latOffset = Math.sin(angle) * radius;
       const lngOffset = Math.cos(angle) * (radius / Math.cos(selectedCountry.lat * (Math.PI / 180)));
 
@@ -116,7 +117,6 @@ export default function App() {
     return [currentCountryLabel, ...individualHouseMarkers];
   };
 
-  // تسجيل دخول لوحة تحكم باسم
   const handleAdminLogin = async (e) => {
     e.preventDefault();
     setAdminLoading(true);
@@ -141,7 +141,6 @@ export default function App() {
     }
   };
 
-  // إضافة شخص جديد بواسطة باسم
   const handleAddPerson = async (e) => {
     e.preventDefault();
     if (!newUsername.trim()) return;
@@ -167,7 +166,38 @@ export default function App() {
     }
   };
 
-  // حذف شخص بواسطة باسم
+  const startEdit = (house) => {
+    setEditingHouseId(house.id);
+    setEditUsername(house.username);
+    setEditCountry(house.country);
+  };
+
+  const handleSaveEdit = async (id) => {
+    if (!editUsername.trim()) return;
+    try {
+      const res = await fetch(`${API_URL}/api/admin/edit-house`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: adminPass,
+          id,
+          newUsername: editUsername,
+          newCountry: editCountry
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAllHouses(data.houses);
+        setPlaces(data.places);
+        setEditingHouseId(null);
+      } else {
+        alert('فشل تعديل البيانات');
+      }
+    } catch (err) {
+      alert('خطأ في الاتصال بالخادم');
+    }
+  };
+
   const handleDeleteHouse = async (house) => {
     if (!confirm(`هل أنت متأكد من حذف بيت ${house.username} في ${house.country}؟`)) return;
 
@@ -203,7 +233,7 @@ export default function App() {
         🌍 عالمنا | إجمالي البيوت المعتمدة: <span style={{ color: '#0284c7' }}>{totalHouses}</span> 🏠
       </div>
 
-      {/* زر العودة للمشهد العام عند الزووم على دولة */}
+      {/* زر العودة للمشهد العام */}
       {selectedCountry && (
         <button
           onClick={handleResetView}
@@ -220,7 +250,7 @@ export default function App() {
         </button>
       )}
 
-      {/* شريط توضيح الدولة التي يتم تصفحها حالياً */}
+      {/* اسم الدولة الحالية */}
       {selectedCountry && (
         <div style={{
           position: 'absolute', top: 75, left: '50%', transform: 'translateX(-50%)', zIndex: 10,
@@ -263,7 +293,7 @@ export default function App() {
         🛡️ لوحة إدارة باسم
       </button>
 
-      {/* نافذة بطاقة تفاصيل البيت الفردي المعتمد */}
+      {/* نافذة تفاصيل البيت الفردي */}
       {selectedHouse && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -310,7 +340,7 @@ export default function App() {
         </div>
       )}
 
-      {/* نافذة تفاصيل المؤسس باسم */}
+      {/* تفاصيل المؤسس */}
       {founderModalOpen && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -341,7 +371,7 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم وإدارة باسم */}
+      {/* لوحة تحكم وإدارة باسم مع ميزة التعديل والحذف */}
       {adminModalOpen && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -350,11 +380,11 @@ export default function App() {
         }}>
           <div style={{
             background: 'white', padding: '24px', borderRadius: '18px',
-            width: '100%', maxWidth: '500px', maxHeight: '85vh', overflowY: 'auto',
+            width: '100%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto',
             boxShadow: '0 15px 40px rgba(0,0,0,0.4)', position: 'relative'
           }}>
             <button
-              onClick={() => setAdminModalOpen(false)}
+              onClick={() => { setAdminModalOpen(false); setEditingHouseId(null); }}
               style={{ position: 'absolute', top: 15, right: 15, background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer' }}
             >
               ✕
@@ -364,7 +394,7 @@ export default function App() {
               <form onSubmit={handleAdminLogin} style={{ textAlign: 'center', padding: '10px 0' }}>
                 <div style={{ fontSize: '36px', marginBottom: '8px' }}>🛡️</div>
                 <h3 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>لوحة إدارة باسم</h3>
-                <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>أدخل كلمة السر الخاصة بك لإضافة بيوت المشاركين</p>
+                <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>أدخل كلمة السر لإضافة وتعديل وحذف البيوت</p>
                 <input
                   type="password"
                   required
@@ -385,7 +415,7 @@ export default function App() {
             ) : (
               <div>
                 <h3 style={{ margin: '0 0 6px 0', color: '#0f172a' }}>إضافة بيت مشارك جديد ➕</h3>
-                <form onSubmit={handleAddPerson} style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
+                <form onSubmit={handleAddPerson} style={{ background: '#f8fafc', padding: '14px', borderRadius: '12px', border: '1px solid #e2e8f0', marginBottom: '18px' }}>
                   <div style={{ marginBottom: '10px' }}>
                     <label style={{ fontSize: '12px', color: '#64748b', display: 'block', marginBottom: '4px' }}>اسم الشخص أو حسابه:</label>
                     <input
@@ -418,23 +448,68 @@ export default function App() {
                   </button>
                 </form>
 
-                <h4 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>البيوت المبنية على الخريطة ({allHouses.length})</h4>
-                <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <h4 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>إدارة البيوت المسجلة ({allHouses.length})</h4>
+                <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {allHouses.map((h) => (
                     <div key={h.id} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      padding: '8px 12px', background: '#f1f5f9', borderRadius: '8px'
+                      padding: '10px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'
                     }}>
-                      <div>
-                        <strong style={{ color: '#1e293b' }}>🏡 {h.username}</strong>
-                        <span style={{ color: '#64748b', fontSize: '12px', marginRight: '6px' }}>({h.country})</span>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteHouse(h)}
-                        style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-                      >
-                        حذف
-                      </button>
+                      {editingHouseId === h.id ? (
+                        /* وضع التعديل المباشر */
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                          <input
+                            type="text"
+                            value={editUsername}
+                            onChange={(e) => setEditUsername(e.target.value)}
+                            style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #0284c7' }}
+                          />
+                          <select
+                            value={editCountry}
+                            onChange={(e) => setEditCountry(e.target.value)}
+                            style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #0284c7' }}
+                          >
+                            {places.map((p) => (
+                              <option key={p.id} value={p.name}>{p.flag} {p.name}</option>
+                            ))}
+                          </select>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => handleSaveEdit(h.id)}
+                              style={{ flex: 1, background: '#10b981', color: 'white', border: 'none', padding: '6px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                            >
+                              حفظ التعديل ✓
+                            </button>
+                            <button
+                              onClick={() => setEditingHouseId(null)}
+                              style={{ background: '#e2e8f0', color: '#475569', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
+                            >
+                              إلغاء
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        /* وضع العرض العادي مع أزرار التعديل والحذف */
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div>
+                            <strong style={{ color: '#1e293b' }}>🏡 {h.username}</strong>
+                            <span style={{ color: '#64748b', fontSize: '12px', marginRight: '6px' }}>({h.country})</span>
+                          </div>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              onClick={() => startEdit(h)}
+                              style={{ background: '#e0f2fe', color: '#0284c7', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                            >
+                              تعديل ✏️
+                            </button>
+                            <button
+                              onClick={() => handleDeleteHouse(h)}
+                              style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                            >
+                              حذف 🗑️
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -444,7 +519,7 @@ export default function App() {
         </div>
       )}
 
-      {/* الكرة الأرضية ثلاثية الأبعاد */}
+      {/* الكرة الأرضية */}
       <Globe
         ref={globeRef}
         backgroundColor="#d8edf7"
@@ -456,7 +531,6 @@ export default function App() {
           el.className = 'marker-label';
           el.style.cursor = 'pointer';
 
-          // 1. بيت المؤسس باسم
           if (d.isFounder) {
             el.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
             el.style.color = '#ffffff';
@@ -471,9 +545,7 @@ export default function App() {
               globeRef.current.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.8 }, 1200);
               setFounderModalOpen(true);
             };
-          } 
-          // 2. بيت فردي لمشارك
-          else if (d.isHouse) {
+          } else if (d.isHouse) {
             el.style.background = 'linear-gradient(135deg, #0284c7, #0369a1)';
             el.style.color = '#ffffff';
             el.style.border = '2px solid #bae6fd';
@@ -491,9 +563,7 @@ export default function App() {
               setSelectedHouse(d);
               globeRef.current?.pointOfView({ lat: d.lat, lng: d.lng, altitude: 0.38 }, 800);
             };
-          } 
-          // 3. شارة مركز الدولة عند الزووم
-          else if (d.isCenterLabel) {
+          } else if (d.isCenterLabel) {
             el.style.background = 'rgba(15, 23, 42, 0.85)';
             el.style.color = '#f8fafc';
             el.style.border = '1px solid #94a3b8';
@@ -502,9 +572,7 @@ export default function App() {
             el.style.fontWeight = 'bold';
             el.style.fontSize = '12px';
             el.innerHTML = `<span>${d.flag}</span> <span>${d.name}</span>`;
-          } 
-          // 4. الدول في المشهد العام
-          else {
+          } else {
             el.onclick = () => handleCountryClick(d);
             el.innerHTML = `<span>${d.flag}</span> <span>${d.name}</span> <span style="color: #0284c7; font-weight: bold;">(${d.count})</span> 🏠`;
           }
