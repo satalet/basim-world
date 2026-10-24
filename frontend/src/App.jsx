@@ -28,7 +28,8 @@ export default function App() {
   const [newCountry, setNewCountry] = useState('فلسطين');
   const [adminLoading, setAdminLoading] = useState(false);
 
-  // حالة التعديل
+  // حالة البحث والتعديل
+  const [searchTerm, setSearchTerm] = useState('');
   const [editingHouseId, setEditingHouseId] = useState(null);
   const [editUsername, setEditUsername] = useState('');
   const [editCountry, setEditCountry] = useState('');
@@ -217,6 +218,21 @@ export default function App() {
     }
   };
 
+  // الانتقال مباشرة إلى بيت الشخص من لوحة الإدارة
+  const handleJumpToHouse = (house) => {
+    const targetCountry = places.find(p => p.name === house.country);
+    if (targetCountry) {
+      setAdminModalOpen(false);
+      handleCountryClick(targetCountry);
+    }
+  };
+
+  // تصفية البيوت بحسب البحث
+  const filteredHouses = allHouses.filter(h =>
+    h.username.toLowerCase().includes(searchTerm.toLowerCase().trim()) ||
+    h.country.toLowerCase().includes(searchTerm.toLowerCase().trim())
+  );
+
   const activeCountryHousesCount = selectedCountry 
     ? allHouses.filter(h => h.country === selectedCountry.name).length 
     : 0;
@@ -371,7 +387,7 @@ export default function App() {
         </div>
       )}
 
-      {/* لوحة تحكم وإدارة باسم مع ميزة التعديل والحذف */}
+      {/* لوحة تحكم وإدارة باسم مع البحث والتعديل والحذف */}
       {adminModalOpen && (
         <div style={{
           position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
@@ -380,11 +396,11 @@ export default function App() {
         }}>
           <div style={{
             background: 'white', padding: '24px', borderRadius: '18px',
-            width: '100%', maxWidth: '520px', maxHeight: '85vh', overflowY: 'auto',
+            width: '100%', maxWidth: '540px', maxHeight: '88vh', overflowY: 'auto',
             boxShadow: '0 15px 40px rgba(0,0,0,0.4)', position: 'relative'
           }}>
             <button
-              onClick={() => { setAdminModalOpen(false); setEditingHouseId(null); }}
+              onClick={() => { setAdminModalOpen(false); setEditingHouseId(null); setSearchTerm(''); }}
               style={{ position: 'absolute', top: 15, right: 15, background: 'none', border: 'none', fontSize: '18px', cursor: 'pointer' }}
             >
               ✕
@@ -448,70 +464,101 @@ export default function App() {
                   </button>
                 </form>
 
-                <h4 style={{ margin: '0 0 10px 0', color: '#0f172a' }}>إدارة البيوت المسجلة ({allHouses.length})</h4>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <h4 style={{ margin: 0, color: '#0f172a' }}>إدارة البيوت المسجلة ({allHouses.length})</h4>
+                  {searchTerm && (
+                    <span style={{ fontSize: '12px', color: '#0284c7', fontWeight: 'bold' }}>
+                      (المطابق: {filteredHouses.length})
+                    </span>
+                  )}
+                </div>
+
+                {/* شريط البحث السريع بالاسم أو الدولة */}
+                <input
+                  type="text"
+                  placeholder="🔍 ابحث عن اسم مشارك أو دولة..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  style={{
+                    width: '100%', padding: '9px 12px', borderRadius: '8px',
+                    border: '1px solid #cbd5e1', marginBottom: '12px', fontSize: '13px'
+                  }}
+                />
+
                 <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {allHouses.map((h) => (
-                    <div key={h.id} style={{
-                      padding: '10px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'
-                    }}>
-                      {editingHouseId === h.id ? (
-                        /* وضع التعديل المباشر */
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          <input
-                            type="text"
-                            value={editUsername}
-                            onChange={(e) => setEditUsername(e.target.value)}
-                            style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #0284c7' }}
-                          />
-                          <select
-                            value={editCountry}
-                            onChange={(e) => setEditCountry(e.target.value)}
-                            style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #0284c7' }}
-                          >
-                            {places.map((p) => (
-                              <option key={p.id} value={p.name}>{p.flag} {p.name}</option>
-                            ))}
-                          </select>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button
-                              onClick={() => handleSaveEdit(h.id)}
-                              style={{ flex: 1, background: '#10b981', color: 'white', border: 'none', padding: '6px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
-                            >
-                              حفظ التعديل ✓
-                            </button>
-                            <button
-                              onClick={() => setEditingHouseId(null)}
-                              style={{ background: '#e2e8f0', color: '#475569', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
-                            >
-                              إلغاء
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        /* وضع العرض العادي مع أزرار التعديل والحذف */
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div>
-                            <strong style={{ color: '#1e293b' }}>🏡 {h.username}</strong>
-                            <span style={{ color: '#64748b', fontSize: '12px', marginRight: '6px' }}>({h.country})</span>
-                          </div>
-                          <div style={{ display: 'flex', gap: '6px' }}>
-                            <button
-                              onClick={() => startEdit(h)}
-                              style={{ background: '#e0f2fe', color: '#0284c7', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-                            >
-                              تعديل ✏️
-                            </button>
-                            <button
-                              onClick={() => handleDeleteHouse(h)}
-                              style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '4px 10px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
-                            >
-                              حذف 🗑️
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                  {filteredHouses.length === 0 ? (
+                    <div style={{ textAlign: 'center', color: '#94a3b8', padding: '20px', fontSize: '13px' }}>
+                      {allHouses.length === 0 ? 'لا يوجد بيوت مضافة بعد.' : 'لا توجد نتائج مطابقة لبحثك.'}
                     </div>
-                  ))}
+                  ) : (
+                    filteredHouses.map((h) => (
+                      <div key={h.id} style={{
+                        padding: '10px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0'
+                      }}>
+                        {editingHouseId === h.id ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            <input
+                              type="text"
+                              value={editUsername}
+                              onChange={(e) => setEditUsername(e.target.value)}
+                              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #0284c7' }}
+                            />
+                            <select
+                              value={editCountry}
+                              onChange={(e) => setEditCountry(e.target.value)}
+                              style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #0284c7' }}
+                            >
+                              {places.map((p) => (
+                                <option key={p.id} value={p.name}>{p.flag} {p.name}</option>
+                              ))}
+                            </select>
+                            <div style={{ display: 'flex', gap: '6px' }}>
+                              <button
+                                onClick={() => handleSaveEdit(h.id)}
+                                style={{ flex: 1, background: '#10b981', color: 'white', border: 'none', padding: '6px', borderRadius: '6px', fontWeight: 'bold', cursor: 'pointer', fontSize: '12px' }}
+                              >
+                                حفظ التعديل ✓
+                              </button>
+                              <button
+                                onClick={() => setEditingHouseId(null)}
+                                style={{ background: '#e2e8f0', color: '#475569', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '12px' }}
+                              >
+                                إلغاء
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <div>
+                              <strong style={{ color: '#1e293b' }}>🏡 {h.username}</strong>
+                              <span style={{ color: '#64748b', fontSize: '12px', marginRight: '6px' }}>({h.country})</span>
+                            </div>
+                            <div style={{ display: 'flex', gap: '5px' }}>
+                              <button
+                                onClick={() => handleJumpToHouse(h)}
+                                title="عرض على الخريطة"
+                                style={{ background: '#e0f2fe', color: '#0369a1', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                              >
+                                📍
+                              </button>
+                              <button
+                                onClick={() => startEdit(h)}
+                                style={{ background: '#f1f5f9', color: '#0284c7', border: '1px solid #cbd5e1', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                              >
+                                تعديل ✏️
+                              </button>
+                              <button
+                                onClick={() => handleDeleteHouse(h)}
+                                style={{ background: '#fee2e2', color: '#ef4444', border: 'none', padding: '4px 8px', borderRadius: '6px', fontSize: '11px', fontWeight: 'bold', cursor: 'pointer' }}
+                              >
+                                حذف 🗑️
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
