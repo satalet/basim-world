@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Globe from 'react-globe.gl';
 
 // رابط سيرفرك المباشر
-const API_URL = 'http://207.154.195.151:4000';
+const API_URL = '';
 
 export default function App() {
   const globeRef = useRef();
